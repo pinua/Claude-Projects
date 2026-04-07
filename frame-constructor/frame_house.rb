@@ -1,16 +1,15 @@
 # ============================================================
-# КОНСТРУКТОР КАРКАСНОГО БУДИНКУ / Frame House Constructor
-# Розмір: 4500 × 10000 мм
-# Конструкція: I-joist підлога, каркасні стіни, двосхилий дах 35°
-#
-# ЗАПУСК у SketchUp:
-#   Window → Ruby Console → load 'C:/path/to/frame_house.rb'
-#   або Extensions → Execute Script
+# КОНСТРУКТОР КАРКАСНОГО БУДИНКУ — SI-MODULAR стиль
+# Дерев'яний двутавр (Timber I-joist) для стін та даху
+# Розмір: 4500 × 10000 мм  |  Основа: бетонна площадка
+# Дах: двосхилий 35°
+# ============================================================
+# ЗАПУСК:  Window → Ruby Console → load 'C:/path/frame_house.rb'
 # ============================================================
 
-# ── Допоміжні методи ────────────────────────────────────────
+# ── ДОПОМІЖНІ МЕТОДИ ────────────────────────────────────────
 
-# Прямокутний брус: початок (x,y,z), розміри (dx,dy,dz)
+# Прямокутний брус (LVL обв'язки, коник)
 def fh_box(ents, x, y, z, dx, dy, dz, layer = nil)
   return if dx <= 0 || dy <= 0 || dz <= 0
   g = ents.add_group
@@ -28,56 +27,108 @@ def fh_box(ents, x, y, z, dx, dy, dz, layer = nil)
   g
 end
 
-# I-joist уздовж осі X: переріз у площині YZ
-# x0..x0+len — проліт, ij_fw×ij_h — ширина×висота
-def fh_ij_x(ents, x0, y0, z0, len, h, fw, fh, wt, layer = nil)
-  return if len <= 0
-  wx = (fw - wt) / 2.0
-  fh_box(ents, x0, y0,    z0,        len, fw, fh,         layer) # нижня полка
-  fh_box(ents, x0, y0+wx, z0+fh,     len, wt, h - 2.0*fh, layer) # стінка
-  fh_box(ents, x0, y0,    z0+h-fh,   len, fw, fh,         layer) # верхня полка
+# Вертикальна двутаврова стійка для X-стіни (глибина в напрямку Y)
+#   x0, y0    — позиція стійки (зовнішня полка)
+#   z0        — низ стійки
+#   h         — висота стійки
+#   d         — глибина двутавра (= товщина стіни)
+#   ff        — ширина полки (видима лиця стійки, вздовж X)
+#   fd        — глибина полки (вздовж Y)
+#   wt        — товщина стінки (вздовж X)
+def fh_stud_x(ents, x0, y0, z0, h, d, ff, fd, wt, layer = nil)
+  wx = (ff - wt) / 2.0
+  fh_box(ents, x0, y0,           z0, ff, fd,       h, layer) # зовнішня полка
+  fh_box(ents, x0 + wx, y0 + fd, z0, wt, d - 2*fd, h, layer) # стінка
+  fh_box(ents, x0, y0 + d - fd,  z0, ff, fd,       h, layer) # внутрішня полка
 end
 
-# I-joist уздовж осі Y: переріз у площині XZ
-def fh_ij_y(ents, x0, y0, z0, len, h, fw, fh, wt, layer = nil)
-  return if len <= 0
-  wx = (fw - wt) / 2.0
-  fh_box(ents, x0,    y0, z0,        fw, len, fh,         layer)
-  fh_box(ents, x0+wx, y0, z0+fh,     wt, len, h - 2.0*fh, layer)
-  fh_box(ents, x0,    y0, z0+h-fh,   fw, len, fh,         layer)
+# Вертикальна двутаврова стійка для Y-стіни (глибина в напрямку X)
+def fh_stud_y(ents, x0, y0, z0, h, d, ff, fd, wt, layer = nil)
+  wy = (ff - wt) / 2.0
+  fh_box(ents, x0,           y0, z0, fd,       ff, h, layer) # зовнішня полка
+  fh_box(ents, x0 + fd,      y0 + wy, z0, d - 2*fd, wt, h, layer) # стінка
+  fh_box(ents, x0 + d - fd,  y0, z0, fd,       ff, h, layer) # внутрішня полка
 end
 
-# Стійки вздовж X-стіни: крайні кутові + регулярні
-def fh_studs_x(ents, x0, y0, z0, wall_len, stud_h, lt, lw, sp, layer)
-  fh_box(ents, x0, y0, z0, lt, lw, stud_h, layer)            # кутова стійка start
+# Ряд стійок уздовж X-стіни (з кутовими)
+def fh_studs_row_x(ents, x0, y0, z0, wall_len, h, d, ff, fd, wt, sp, layer)
+  fh_stud_x(ents, x0, y0, z0, h, d, ff, fd, wt, layer)           # кутова start
   sx = x0 + sp
-  while sx < x0 + wall_len - lt - 0.001.mm
-    fh_box(ents, sx, y0, z0, lt, lw, stud_h, layer)
+  while sx + ff <= x0 + wall_len - ff - 0.001.mm
+    fh_stud_x(ents, sx, y0, z0, h, d, ff, fd, wt, layer)
     sx += sp
   end
-  fh_box(ents, x0 + wall_len - lt, y0, z0, lt, lw, stud_h, layer) # кутова стійка end
+  fh_stud_x(ents, x0 + wall_len - ff, y0, z0, h, d, ff, fd, wt, layer) # кутова end
 end
 
-# Стійки вздовж Y-стіни
-def fh_studs_y(ents, x0, y0, z0, wall_len, stud_h, lt, lw, sp, layer)
-  fh_box(ents, x0, y0, z0, lw, lt, stud_h, layer)
+# Ряд стійок уздовж Y-стіни (з кутовими)
+def fh_studs_row_y(ents, x0, y0, z0, wall_len, h, d, ff, fd, wt, sp, layer)
+  fh_stud_y(ents, x0, y0, z0, h, d, ff, fd, wt, layer)
   sy = y0 + sp
-  while sy < y0 + wall_len - lt - 0.001.mm
-    fh_box(ents, x0, sy, z0, lw, lt, stud_h, layer)
+  while sy + ff <= y0 + wall_len - ff - 0.001.mm
+    fh_stud_y(ents, x0, sy, z0, h, d, ff, fd, wt, layer)
     sy += sp
   end
-  fh_box(ents, x0, y0 + wall_len - lt, z0, lw, lt, stud_h, layer)
+  fh_stud_y(ents, x0, y0 + wall_len - ff, z0, h, d, ff, fd, wt, layer)
+end
+
+# Похила двутаврова крокв (I-joist rafter) через pushpull перпендикулярної грані
+#   x0, ry, z0        — початкова точка (нижня-зовнішня кутова)
+#   rlen              — довжина крокви
+#   fw                — ширина полки (вздовж Y = товщина крокви)
+#   h, fh, wt         — висота / висота полки / товщина стінки
+#   ax, az            — одиничний вектор осі крокви (X та Z компоненти)
+#   dx, dz            — одиничний вектор глибини (⊥ осі в площині XZ)
+#   layer
+def fh_ij_rafter(ents, x0, ry, z0, rlen, fw, h, fh, wt, ax, az, dx, dz, layer)
+  web_h = h - 2.0 * fh
+  wyo   = (fw - wt) / 2.0
+  exp   = Geom::Vector3d.new(ax, 0, az)
+
+  # ── Нижня полка
+  d1x = dx * fh;  d1z = dz * fh
+  g1 = ents.add_group; g1.layer = layer
+  f = g1.entities.add_face(
+    Geom::Point3d.new(x0,       ry,      z0),
+    Geom::Point3d.new(x0,       ry + fw, z0),
+    Geom::Point3d.new(x0 + d1x, ry + fw, z0 + d1z),
+    Geom::Point3d.new(x0 + d1x, ry,      z0 + d1z)
+  )
+  if f; f.reverse! if f.normal.dot(exp) < 0; f.pushpull(rlen); end
+
+  # ── Стінка
+  x1 = x0 + d1x;  z1 = z0 + d1z
+  d2x = dx * web_h; d2z = dz * web_h
+  g2 = ents.add_group; g2.layer = layer
+  f = g2.entities.add_face(
+    Geom::Point3d.new(x1,       ry + wyo,      z1),
+    Geom::Point3d.new(x1,       ry + wyo + wt, z1),
+    Geom::Point3d.new(x1 + d2x, ry + wyo + wt, z1 + d2z),
+    Geom::Point3d.new(x1 + d2x, ry + wyo,      z1 + d2z)
+  )
+  if f; f.reverse! if f.normal.dot(exp) < 0; f.pushpull(rlen); end
+
+  # ── Верхня полка
+  x2 = x1 + d2x;  z2 = z1 + d2z
+  g3 = ents.add_group; g3.layer = layer
+  f = g3.entities.add_face(
+    Geom::Point3d.new(x2,       ry,      z2),
+    Geom::Point3d.new(x2,       ry + fw, z2),
+    Geom::Point3d.new(x2 + d1x, ry + fw, z2 + d1z),
+    Geom::Point3d.new(x2 + d1x, ry,      z2 + d1z)
+  )
+  if f; f.reverse! if f.normal.dot(exp) < 0; f.pushpull(rlen); end
 end
 
 def fh_get_layer(model, name)
   model.layers[name] || model.layers.add(name)
 end
 
-# ── Головна функція ──────────────────────────────────────────
+# ── ГОЛОВНА ФУНКЦІЯ ──────────────────────────────────────────
 
 def build_frame_house
   model = Sketchup.active_model
-  model.start_operation('Frame House Constructor', true)
+  model.start_operation('Frame House SI-style', true)
 
   begin
     ents = model.active_entities
@@ -86,19 +137,25 @@ def build_frame_house
     # ПАРАМЕТРИ / PARAMETERS
     # ════════════════════════════════════════════
 
-    ow = 4500.mm    # ширина по зовнішньому каркасу (X)
-    ol = 10000.mm   # довжина (Y)
-    wh = 2700.mm    # висота стін (від підлоги до верху подвійної обв'язки)
+    ow = 4500.mm    # зовнішня ширина (X)
+    ol = 10000.mm   # зовнішня довжина (Y)
+    wh = 2700.mm    # висота стін (від плити до верху подвійної обв'язки)
 
-    lt = 45.mm      # товщина дошки (мм)
-    lw = 145.mm     # ширина дошки (мм)  — товщина стіни
+    # Двутаврова стійка (wall I-joist stud)
+    ws_d  = 200.mm  # глибина двутавра = товщина стіни
+    ws_ff = 45.mm   # ширина полки (видима лиця)
+    ws_fd = 45.mm   # глибина полки
+    ws_wt = 9.mm    # товщина стінки
 
-    ij_h  = 200.mm  # висота I-joist
-    ij_fh = 38.mm   # товщина полки (flange)
-    ij_fw = 45.mm   # ширина полки
-    ij_wt = 9.mm    # товщина стінки (web)
+    # LVL обв'язки (plates)
+    lt = 45.mm      # товщина плити
 
-    joist_sp  = 600.mm   # крок підлогових балок
+    # Двутаврова крокв (roof I-joist rafter)
+    rf_h  = 200.mm  # загальна глибина
+    rf_fh = 38.mm   # висота полки
+    rf_fw = 45.mm   # ширина (вздовж гребня = товщина крокви)
+    rf_wt = 9.mm    # товщина стінки
+
     stud_sp   = 600.mm   # крок стійок
     rafter_sp = 600.mm   # крок крокв
 
@@ -109,120 +166,97 @@ def build_frame_house
     tan_p = Math.tan(pitch_rad)
 
     # ════════════════════════════════════════════
-    # ВЕРТИКАЛЬНІ РІВНІ / LEVELS
+    # РІВНІ / LEVELS  (основа = Z = 0)
     # ════════════════════════════════════════════
 
-    z_floor  = 0.mm              # низ підлогових балок
-    z_wall   = z_floor + ij_h    # верх підлоги = низ стін
-    stud_h   = wh - 3.0 * lt    # висота стійок (3 плити: 1 нижня + 2 верхні)
-    z_top    = z_wall + wh       # верх подвійної верхньої обв'язки
-    ridge_h  = (ow / 2.0) * tan_p  # висота конька над верхньою обв'язкою
-    z_ridge  = z_top + ridge_h   # абсолютна висота конька
-    rafter_len = (ow / 2.0) / cos_p  # довжина крокви
+    z0    = 0.mm               # бетонна плита
+    stud_h = wh - 3.0 * lt    # чиста висота стійок (3 плити: 1+2)
+    z_top  = wh                # верх подвійної верхньої обв'язки
+    ridge_h   = (ow / 2.0) * tan_p
+    z_ridge   = z_top + ridge_h
+    rafter_len = (ow / 2.0) / cos_p
 
     # ════════════════════════════════════════════
     # ШАРИ / TAGS
     # ════════════════════════════════════════════
 
-    l_floor = fh_get_layer(model, '01 Підлогові балки')
-    l_walls = fh_get_layer(model, '02 Стіни')
-    l_roof  = fh_get_layer(model, '03 Дах')
+    l_walls = fh_get_layer(model, '01 Стіни — двутавр')
+    l_plate = fh_get_layer(model, '02 Обв\'язки — LVL')
+    l_roof  = fh_get_layer(model, '03 Дах — двутавр')
 
     # ════════════════════════════════════════════
-    # 1. ПІДЛОГА / FLOOR SYSTEM
-    # ════════════════════════════════════════════
-    #
-    # I-joists:  проліт уздовж X (4500мм), крок 600мм уздовж Y
-    # Rim board: суцільний LVL по боках X=−lt та X=ow
-
-    joist_positions = [0.mm]
-    yp = joist_sp
-    while yp < ol - ij_fw - 0.001.mm
-      joist_positions << yp
-      yp += joist_sp
-    end
-    joist_positions << (ol - ij_fw)  # остання (rim) балка
-
-    joist_positions.each do |y_pos|
-      fh_ij_x(ents, 0, y_pos, z_floor, ow, ij_h, ij_fw, ij_fh, ij_wt, l_floor)
-    end
-
-    # Бокові обв'язки (rim / band joist) — суцільний LVL, та сама глибина
-    fh_box(ents, -lt, 0, z_floor, lt, ol, ij_h, l_floor)  # ліва
-    fh_box(ents,  ow, 0, z_floor, lt, ol, ij_h, l_floor)  # права
-
-    # ════════════════════════════════════════════
-    # 2. СТІНИ / WALL FRAMING
+    # 1. СТІНИ / WALL FRAMING
     # ════════════════════════════════════════════
     #
-    # Передня (y=0) та задня (y=ol−lw) — уздовж X, повна ширина ow
-    # Ліва  (x=0)  та права (x=ow−lw) — уздовж Y, між торцевими стінами
+    # Торцеві стіни (X): y = 0  та  y = ol − ws_d
+    # Бокові стіни (Y):  x = 0  та  x = ow − ws_d
+    #   між торцевими: від y = ws_d до y = ol − ws_d
+    #
+    # Кожна стіна:
+    #   [a] Нижня LVL обв'язка   z = 0     висота lt
+    #   [b] I-joist стійки       z = lt    висота stud_h
+    #   [c] Верхня LVL обв'язка  z = lt+stud_h       висота lt
+    #   [d] Подвійна верхня LVL  z = lt+stud_h+lt    висота lt
 
-    [0, ol - lw].each do |wy|                               # торцеві стіни (X)
-      fh_box(ents, 0, wy, z_wall,                  ow, lw, lt,     l_walls) # нижня обв'язка
-      fh_studs_x(ents, 0, wy, z_wall + lt,         ow, stud_h, lt, lw, stud_sp, l_walls)
-      fh_box(ents, 0, wy, z_wall + lt + stud_h,    ow, lw, lt,     l_walls) # верхня обв'язка 1
-      fh_box(ents, 0, wy, z_wall + lt + stud_h + lt, ow, lw, lt,   l_walls) # верхня обв'язка 2
+    z_stud  = lt                       # низ стійок
+    z_tp1   = lt + stud_h              # низ верхньої обв'язки 1
+    z_tp2   = lt + stud_h + lt         # низ верхньої обв'язки 2
+
+    # — Торцеві стіни (вздовж X) ———————————————
+    [0.mm, ol - ws_d].each do |wy|
+      # LVL плити (нижня + 2 верхні)
+      fh_box(ents, 0, wy, z0,   ow, ws_d, lt,  l_plate)   # нижня
+      fh_box(ents, 0, wy, z_tp1, ow, ws_d, lt, l_plate)   # верхня 1
+      fh_box(ents, 0, wy, z_tp2, ow, ws_d, lt, l_plate)   # верхня 2
+      # I-joist стійки
+      fh_studs_row_x(ents, 0, wy, z_stud, ow, stud_h,
+                     ws_d, ws_ff, ws_fd, ws_wt, stud_sp, l_walls)
     end
 
-    side_y0 = lw                    # бокові стіни починаються після торцевих
-    side_len = ol - 2.0 * lw
+    # — Бокові стіни (вздовж Y) ————————————————
+    # Між торцевими стінами: y від ws_d до ol−ws_d
+    side_y0  = ws_d
+    side_len = ol - 2.0 * ws_d
 
-    [0, ow - lw].each do |wx|                               # бокові стіни (Y)
-      fh_box(ents, wx, side_y0, z_wall,                  lw, side_len, lt,     l_walls)
-      fh_studs_y(ents, wx, side_y0, z_wall + lt,         side_len, stud_h, lt, lw, stud_sp, l_walls)
-      fh_box(ents, wx, side_y0, z_wall + lt + stud_h,    lw, side_len, lt,     l_walls)
-      fh_box(ents, wx, side_y0, z_wall + lt + stud_h + lt, lw, side_len, lt,   l_walls)
+    [0.mm, ow - ws_d].each do |wx|
+      fh_box(ents, wx, side_y0, z0,    ws_d, side_len, lt, l_plate)
+      fh_box(ents, wx, side_y0, z_tp1, ws_d, side_len, lt, l_plate)
+      fh_box(ents, wx, side_y0, z_tp2, ws_d, side_len, lt, l_plate)
+      fh_studs_row_y(ents, wx, side_y0, z_stud, side_len, stud_h,
+                     ws_d, ws_ff, ws_fd, ws_wt, stud_sp, l_walls)
     end
 
     # ════════════════════════════════════════════
-    # 3. ДАХ / ROOF FRAMING
+    # 2. ДАХ / ROOF FRAMING
     # ════════════════════════════════════════════
     #
-    # Коник (ridge board): 45×145мм по всій довжині
-    # Крокви (rafters):    45×145мм, крок 600мм
-    #   Ліві — від x=0, z=z_top  до  x=ow/2, z=z_ridge
-    #   Праві — від x=ow, z=z_top до  x=ow/2, z=z_ridge
+    # Коник: LVL 45×145мм  по центру, вздовж Y
+    # Крокви: I-joist 45fw/9web/200h  крок 600мм
+    #   Ліві:  від (0,   ry, z_top) → (ow/2, ry, z_ridge)
+    #   Праві: від (ow,  ry, z_top) → (ow/2, ry, z_ridge)
 
+    # Коник (ridge board) — LVL 45×145мм
+    ridge_board_w = 145.mm
     ridge_x = ow / 2.0 - lt / 2.0
-    fh_box(ents, ridge_x, 0, z_ridge, lt, ol, lw, l_roof)
+    fh_box(ents, ridge_x, 0, z_ridge, lt, ol, ridge_board_w, l_roof)
 
-    # Вектори глибини крокви (⊥ до осі крокви в площині XZ)
-    # Ліва крокв: вісь = (cos_p, 0, sin_p)  → глибина = (sin_p, 0, −cos_p)
-    # Права крокв: вісь = (−cos_p, 0, sin_p) → глибина = (−sin_p, 0, −cos_p)
-    dxl =  sin_p * lw;  dzl = -cos_p * lw
-    dxr = -sin_p * lw;  dzr = -cos_p * lw
+    # Вектори осі та глибини крокв у площині XZ
+    # Ліва  крокв: вісь → (+cos_p, 0, +sin_p), глибина → (+sin_p, 0, −cos_p)
+    # Права крокв: вісь → (−cos_p, 0, +sin_p), глибина → (−sin_p, 0, −cos_p)
+    l_ax = cos_p;  l_az = sin_p;  l_dx = sin_p;  l_dz = -cos_p
+    r_ax = -cos_p; r_az = sin_p;  r_dx = -sin_p; r_dz = -cos_p
 
     ry = 0.mm
     while ry <= ol + 0.001.mm
+      # Ліва крокв — починається на лівій стіні (x=0)
+      fh_ij_rafter(ents, 0.mm,  ry, z_top, rafter_len,
+                   rf_fw, rf_h, rf_fh, rf_wt,
+                   l_ax, l_az, l_dx * rf_h, l_dz * rf_h, l_roof)
 
-      # ── Ліва крокв ──
-      gl = ents.add_group
-      gl.layer = l_roof
-      fl = gl.entities.add_face(
-        Geom::Point3d.new(0,   ry,      z_top),
-        Geom::Point3d.new(0,   ry + lt, z_top),
-        Geom::Point3d.new(dxl, ry + lt, z_top + dzl),
-        Geom::Point3d.new(dxl, ry,      z_top + dzl)
-      )
-      if fl
-        fl.reverse! if fl.normal.dot(Geom::Vector3d.new(cos_p, 0, sin_p)) < 0
-        fl.pushpull(rafter_len)
-      end
-
-      # ── Права крокв ──
-      gr = ents.add_group
-      gr.layer = l_roof
-      fr = gr.entities.add_face(
-        Geom::Point3d.new(ow,        ry,      z_top),
-        Geom::Point3d.new(ow,        ry + lt, z_top),
-        Geom::Point3d.new(ow + dxr,  ry + lt, z_top + dzr),
-        Geom::Point3d.new(ow + dxr,  ry,      z_top + dzr)
-      )
-      if fr
-        fr.reverse! if fr.normal.dot(Geom::Vector3d.new(-cos_p, 0, sin_p)) < 0
-        fr.pushpull(rafter_len)
-      end
+      # Права крокв — починається на правій стіні (x=ow)
+      fh_ij_rafter(ents, ow,    ry, z_top, rafter_len,
+                   rf_fw, rf_h, rf_fh, rf_wt,
+                   r_ax, r_az, r_dx * rf_h, r_dz * rf_h, l_roof)
 
       ry += rafter_sp
     end
@@ -231,46 +265,53 @@ def build_frame_house
     # СПЕЦИФІКАЦІЯ / BILL OF MATERIALS
     # ════════════════════════════════════════════
 
-    n_joists      = joist_positions.size
-    n_rafters     = ((ol / rafter_sp) / 1.mm).round + 1   # пар
-    n_studs_end   = 2 * (((ow / stud_sp) / 1.mm).floor + 1) * 2   # торцеві стіни × 2
-    n_studs_side  = 2 * (((side_len / stud_sp) / 1.mm).floor + 1) * 2  # бокові стіни × 2
+    n_rafters = ((ol / rafter_sp) / 1.mm).round + 1
 
-    puts "\n" + "="*50
-    puts "  СПЕЦИФІКАЦІЯ МАТЕРІАЛІВ / BILL OF MATERIALS"
-    puts "="*50
-    puts "  Будинок: #{(ow / 1.mm / 1000.0).round(2)} × #{(ol / 1.mm / 1000.0).round(2)} м"
-    puts "  Висота стін: #{(wh / 1.mm / 1000.0).round(2)} м"
-    puts "  Кут даху: #{pitch_deg}°  Висота конька: #{(z_ridge / 1.mm / 1000.0).round(2)} м від підлоги"
-    puts ""
-    puts "  ПІДЛОГА:"
-    puts "    I-joist 45/9/45×200 L=#{(ow/1.mm/1000.0).round(2)}м:   #{n_joists} шт"
-    puts "    Rim board 45×200 L=#{(ol/1.mm/1000.0).round(2)}м:       2 шт"
-    puts ""
-    puts "  СТІНИ (45×145мм):"
-    puts "    Нижня обв'язка:  #{((2*ow + 2*side_len)/1.mm/1000.0).round(2)} м.п."
-    puts "    Подвійна верхня: #{(2*(2*ow + 2*side_len)/1.mm/1000.0).round(2)} м.п."
-    puts "    Стійки L=#{(stud_h/1.mm/1000.0).round(2)}м — торцеві стіни: ~#{n_studs_end} шт"
-    puts "    Стійки L=#{(stud_h/1.mm/1000.0).round(2)}м — бокові стіни:  ~#{n_studs_side} шт"
-    puts ""
-    puts "  ДАХ (45×145мм):"
-    puts "    Коник L=#{(ol/1.mm/1000.0).round(2)}м:                    1 шт"
-    puts "    Крокви L=#{(rafter_len/1.mm/1000.0).round(2)}м:             #{n_rafters * 2} шт  (#{n_rafters} пар)"
-    puts "="*50
+    # Підрахунок стійок
+    n_studs_end  = 2 * (((ow / stud_sp) / 1.mm).floor + 1) # на одну торцеву стіну
+    n_studs_side = 2 * (((side_len / stud_sp) / 1.mm).floor + 1) # на одну бокову
+    n_studs_total = 2 * n_studs_end + 2 * n_studs_side
+
+    # Метри погонні обв'язок
+    lm_plates = (3.0 * (2 * ow + 2 * side_len)) / 1.mm / 1000.0  # 3 плити × периметр
+
+    puts "\n" + "="*54
+    puts "  СПЕЦИФІКАЦІЯ / BILL OF MATERIALS"
+    puts "  SI-MODULAR стиль — дерев'яний двутавр"
+    puts "="*54
+    puts "  Розмір: #{(ow/1.mm/1000.0).round(2)} × #{(ol/1.mm/1000.0).round(2)} м"
+    puts "  Висота стін: #{(wh/1.mm/1000.0).round(2)} м  (стійки #{(stud_h/1.mm/1000.0).round(2)} м)"
+    puts "  Кут даху: #{pitch_deg}°"
+    puts "  Висота конька: #{(z_ridge/1.mm/1000.0).round(2)} м від підлоги"
+    puts "  Довжина крокви: #{(rafter_len/1.mm/1000.0).round(2)} м"
+    puts "-"*54
+    puts "  СТІНИ (двутавр I-200 / 45-9-45):"
+    puts "    Стійки L=#{(stud_h/1.mm/1000.0).round(2)}м, крок 600мм: #{n_studs_total} шт"
+    puts "      — торцеві стіни (×2): #{n_studs_end} шт кожна"
+    puts "      — бокові стіни (×2):  #{n_studs_side} шт кожна"
+    puts "  ОБВЯЗКИ (LVL 45×200мм):"
+    puts "    Нижня + подвійна верхня: #{lm_plates.round(1)} м.п."
+    puts "-"*54
+    puts "  ДАХ:"
+    puts "    Коник LVL 45×145мм L=#{(ol/1.mm/1000.0).round(2)}м: 1 шт"
+    puts "    Крокви I-200 L=#{(rafter_len/1.mm/1000.0).round(2)}м: #{n_rafters*2} шт (#{n_rafters} пар)"
+    puts "="*54
     puts ""
 
     model.commit_operation
     UI.messagebox(
-      "Frame House побудовано!\n\n" \
-      "Розміри: 4500 × 10000 мм\n" \
+      "Каркасний будинок побудовано!\n\n" \
+      "#{(ow/1.mm/1000.0).round(2)} × #{(ol/1.mm/1000.0).round(2)} м  |  Дах #{pitch_deg}°\n" \
+      "Стіни: I-joist 200мм  (товщина стіни)\n" \
+      "Крокви: I-joist 200мм\n" \
       "Висота конька: #{(z_ridge/1.mm/1000.0).round(2)} м\n\n" \
-      "Специфікацію дивіться у Ruby Console.\n" \
-      "Шари: 01 Підлогові балки | 02 Стіни | 03 Дах"
+      "Специфікація — Ruby Console\n" \
+      "Шари: 01 Стіни | 02 Обв'язки | 03 Дах"
     )
 
   rescue => err
     model.abort_operation
-    UI.messagebox("Помилка побудови:\n#{err.message}\n\n#{err.backtrace[0..3].join("\n")}")
+    UI.messagebox("Помилка:\n#{err.message}\n\n#{err.backtrace[0..4].join("\n")}")
   end
 end
 
