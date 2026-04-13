@@ -38,6 +38,14 @@ add_action('admin_menu', function () {
     );
     add_submenu_page(
         'claude-ai-seo',
+        'Рекламні кампанії',
+        'Рекламні кампанії',
+        'manage_options',
+        'claude-ad-campaign',
+        'claude_render_ad_campaign'
+    );
+    add_submenu_page(
+        'claude-ai-seo',
         'Налаштування',
         'Налаштування',
         'manage_options',
@@ -504,4 +512,387 @@ URL: {$url}
 
         echo '<div class="notice notice-success"><p>✅ Мета-теги застосовано до запису.</p></div>';
     }
+}
+
+// ─── Генератор рекламних кампаній ─────────────────────────────────────────────
+
+function claude_render_ad_campaign() {
+    $result = null;
+    $error  = null;
+
+    $platforms = [
+        'google_search' => 'Google Search Ads',
+        'google_display' => 'Google Display Ads',
+        'facebook'      => 'Facebook Ads',
+        'instagram'     => 'Instagram Ads',
+        'youtube'       => 'YouTube Ads',
+    ];
+
+    $goals = [
+        'sales'      => 'Продажі / конверсії',
+        'leads'      => 'Ліди / заявки',
+        'traffic'    => 'Трафік на сайт',
+        'awareness'  => 'Впізнаваність бренду',
+        'engagement' => 'Залученість аудиторії',
+    ];
+
+    if (isset($_POST['claude_generate_ad'])) {
+        check_admin_referer('claude_generate_ad');
+
+        $product   = sanitize_text_field($_POST['product']);
+        $audience  = sanitize_text_field($_POST['audience']);
+        $goal      = sanitize_text_field($_POST['goal']);
+        $platform  = sanitize_text_field($_POST['platform']);
+        $usp       = sanitize_textarea_field($_POST['usp']);
+        $budget    = sanitize_text_field($_POST['budget']);
+        $tone      = sanitize_text_field($_POST['tone']);
+
+        $platform_label = $platforms[$platform] ?? $platform;
+        $goal_label     = $goals[$goal] ?? $goal;
+
+        $system = 'Ти — досвідчений маркетолог і копірайтер з 10-річним досвідом у digital-рекламі.
+Спеціалізуєшся на створенні ефективних рекламних кампаній для українського ринку.
+Пишеш виключно українською мовою. Завжди відповідаєш ТІЛЬКИ валідним JSON без жодного зайвого тексту.';
+
+        $user = "Створи повноцінну рекламну кампанію для платформи {$platform_label}.
+
+Продукт / послуга: {$product}
+Цільова аудиторія: {$audience}
+Унікальна торгова пропозиція (УТП): {$usp}
+Ціль кампанії: {$goal_label}
+Орієнтовний бюджет: {$budget}
+Тон комунікації: {$tone}
+
+Поверни ТІЛЬКИ JSON (без markdown, без ```json):
+{
+  \"campaign_name\": \"Назва кампанії\",
+  \"campaign_summary\": \"Короткий опис стратегії кампанії (2-3 речення)\",
+  \"headlines\": [
+    \"Заголовок 1 (до 30 символів)\",
+    \"Заголовок 2 (до 30 символів)\",
+    \"Заголовок 3 (до 30 символів)\",
+    \"Заголовок 4 (до 30 символів)\",
+    \"Заголовок 5 (до 30 символів)\"
+  ],
+  \"descriptions\": [
+    \"Опис 1 (до 90 символів)\",
+    \"Опис 2 (до 90 символів)\",
+    \"Опис 3 (до 90 символів)\"
+  ],
+  \"cta_buttons\": [
+    \"CTA 1\",
+    \"CTA 2\",
+    \"CTA 3\"
+  ],
+  \"ad_copies\": [
+    {
+      \"variant\": \"A\",
+      \"headline\": \"Основний заголовок\",
+      \"body\": \"Текст оголошення (2-4 речення)\",
+      \"cta\": \"Текст кнопки\"
+    },
+    {
+      \"variant\": \"B\",
+      \"headline\": \"Альтернативний заголовок\",
+      \"body\": \"Альтернативний текст оголошення\",
+      \"cta\": \"Текст кнопки\"
+    }
+  ],
+  \"keywords\": {
+    \"broad\": [\"ключове слово 1\", \"ключове слово 2\", \"ключове слово 3\"],
+    \"phrase\": [\"фразовий збіг 1\", \"фразовий збіг 2\"],
+    \"exact\": [\"[точний збіг 1]\", \"[точний збіг 2]\"],
+    \"negative\": [\"мінус-слово 1\", \"мінус-слово 2\", \"мінус-слово 3\"]
+  },
+  \"targeting\": {
+    \"age\": \"Вікова група\",
+    \"interests\": [\"інтерес 1\", \"інтерес 2\", \"інтерес 3\"],
+    \"locations\": [\"місто / регіон 1\", \"місто / регіон 2\"],
+    \"devices\": \"Рекомендовані пристрої\"
+  },
+  \"budget_recommendation\": {
+    \"daily_budget\": \"Рекомендований денний бюджет\",
+    \"bid_strategy\": \"Рекомендована стратегія ставок\",
+    \"estimated_cpc\": \"Орієнтовна ціна кліку\"
+  },
+  \"kpis\": [
+    {\"metric\": \"Назва метрики\", \"target\": \"Цільове значення\"},
+    {\"metric\": \"Назва метрики\", \"target\": \"Цільове значення\"},
+    {\"metric\": \"Назва метрики\", \"target\": \"Цільове значення\"}
+  ]
+}";
+
+        $response = claude_api_request($system, $user);
+
+        if (is_wp_error($response)) {
+            $error = $response->get_error_message();
+        } else {
+            $data = json_decode($response, true);
+            if ($data) {
+                $result = $data;
+            } else {
+                $error = 'Помилка розбору відповіді. Спробуйте ще раз.';
+            }
+        }
+    }
+    ?>
+    <div class="wrap">
+        <h1>📢 Генератор рекламних кампаній</h1>
+        <p class="description" style="font-size:14px;margin-bottom:20px">
+            Створюйте рекламні кампанії для Google, Facebook, Instagram та інших платформ за допомогою Claude AI.
+        </p>
+
+        <form method="post" style="max-width:800px">
+            <?php wp_nonce_field('claude_generate_ad'); ?>
+            <table class="form-table">
+                <tr>
+                    <th><label for="product">Продукт / послуга *</label></th>
+                    <td>
+                        <input type="text" id="product" name="product" class="large-text" required
+                               value="<?php echo isset($_POST['product']) ? esc_attr($_POST['product']) : ''; ?>"
+                               placeholder="напр.: Онлайн-курс з веб-розробки">
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="audience">Цільова аудиторія *</label></th>
+                    <td>
+                        <input type="text" id="audience" name="audience" class="large-text" required
+                               value="<?php echo isset($_POST['audience']) ? esc_attr($_POST['audience']) : ''; ?>"
+                               placeholder="напр.: Молодь 18-35 років, яка хоче змінити кар'єру в IT">
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="usp">УТП (унікальна пропозиція)</label></th>
+                    <td>
+                        <textarea id="usp" name="usp" class="large-text" rows="3"
+                                  placeholder="Що відрізняє вас від конкурентів? Яку цінність ви пропонуєте?"><?php echo isset($_POST['usp']) ? esc_textarea($_POST['usp']) : ''; ?></textarea>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="platform">Платформа</label></th>
+                    <td>
+                        <select id="platform" name="platform" class="regular-text">
+                            <?php foreach ($platforms as $key => $label): ?>
+                                <option value="<?php echo esc_attr($key); ?>"
+                                    <?php selected(($_POST['platform'] ?? 'google_search'), $key); ?>>
+                                    <?php echo esc_html($label); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="goal">Ціль кампанії</label></th>
+                    <td>
+                        <select id="goal" name="goal" class="regular-text">
+                            <?php foreach ($goals as $key => $label): ?>
+                                <option value="<?php echo esc_attr($key); ?>"
+                                    <?php selected(($_POST['goal'] ?? 'sales'), $key); ?>>
+                                    <?php echo esc_html($label); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="tone">Тон комунікації</label></th>
+                    <td>
+                        <select id="tone" name="tone" class="regular-text">
+                            <option value="professional" <?php selected(($_POST['tone'] ?? ''), 'professional'); ?>>Професійний</option>
+                            <option value="friendly" <?php selected(($_POST['tone'] ?? 'friendly'), 'friendly'); ?>>Дружній / розмовний</option>
+                            <option value="urgent" <?php selected(($_POST['tone'] ?? ''), 'urgent'); ?>>Терміновий / FOMO</option>
+                            <option value="inspiring" <?php selected(($_POST['tone'] ?? ''), 'inspiring'); ?>>Надихаючий</option>
+                            <option value="humorous" <?php selected(($_POST['tone'] ?? ''), 'humorous'); ?>>Гумористичний</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="budget">Орієнтовний бюджет</label></th>
+                    <td>
+                        <input type="text" id="budget" name="budget" class="regular-text"
+                               value="<?php echo isset($_POST['budget']) ? esc_attr($_POST['budget']) : ''; ?>"
+                               placeholder="напр.: 500 USD/міс або 50 USD/день">
+                        <p class="description">Необов'язково — для рекомендацій по бюджету</p>
+                    </td>
+                </tr>
+            </table>
+            <p>
+                <input type="submit" name="claude_generate_ad" class="button button-primary button-large"
+                       value="🚀 Згенерувати кампанію">
+            </p>
+        </form>
+
+        <?php if ($error): ?>
+            <div class="notice notice-error"><p>❌ <?php echo esc_html($error); ?></p></div>
+        <?php endif; ?>
+
+        <?php if ($result): ?>
+            <hr>
+            <h2>📋 Результати кампанії: «<?php echo esc_html($result['campaign_name'] ?? ''); ?>»</h2>
+            <p style="color:#555;font-style:italic"><?php echo esc_html($result['campaign_summary'] ?? ''); ?></p>
+
+            <div style="max-width:900px">
+
+                <?php /* Варіанти оголошень */ ?>
+                <div style="background:#fff;padding:20px;border:1px solid #ddd;border-radius:4px;margin-bottom:20px">
+                    <h3>🎯 Варіанти оголошень (A/B)</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px">
+                        <?php foreach ($result['ad_copies'] ?? [] as $copy): ?>
+                            <div style="border:2px solid #2271b1;border-radius:6px;padding:15px;background:#f0f6fc">
+                                <div style="background:#2271b1;color:#fff;padding:4px 10px;border-radius:3px;
+                                            display:inline-block;font-size:12px;margin-bottom:10px">
+                                    Варіант <?php echo esc_html($copy['variant'] ?? ''); ?>
+                                </div>
+                                <div style="font-size:16px;font-weight:bold;color:#1a0dab;margin-bottom:6px">
+                                    <?php echo esc_html($copy['headline'] ?? ''); ?>
+                                </div>
+                                <div style="color:#555;margin-bottom:10px;line-height:1.5">
+                                    <?php echo esc_html($copy['body'] ?? ''); ?>
+                                </div>
+                                <div style="background:#2271b1;color:#fff;padding:6px 14px;border-radius:4px;
+                                            display:inline-block;font-size:13px">
+                                    <?php echo esc_html($copy['cta'] ?? ''); ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <?php /* Заголовки та описи */ ?>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:20px">
+                    <div style="background:#fff;padding:20px;border:1px solid #ddd;border-radius:4px">
+                        <h3>📝 Заголовки</h3>
+                        <ul style="margin:0;padding-left:20px">
+                            <?php foreach ($result['headlines'] ?? [] as $i => $headline): ?>
+                                <li style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+                                    <span><?php echo esc_html($headline); ?></span>
+                                    <small style="color:<?php echo mb_strlen($headline) <= 30 ? '#46b450' : '#dc3232'; ?>;margin-left:8px">
+                                        <?php echo mb_strlen($headline); ?>/30
+                                    </small>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                    <div style="background:#fff;padding:20px;border:1px solid #ddd;border-radius:4px">
+                        <h3>📄 Описи</h3>
+                        <ul style="margin:0;padding-left:20px">
+                            <?php foreach ($result['descriptions'] ?? [] as $desc): ?>
+                                <li style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start">
+                                    <span style="flex:1"><?php echo esc_html($desc); ?></span>
+                                    <small style="color:<?php echo mb_strlen($desc) <= 90 ? '#46b450' : '#dc3232'; ?>;margin-left:8px;white-space:nowrap">
+                                        <?php echo mb_strlen($desc); ?>/90
+                                    </small>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                </div>
+
+                <?php /* CTA кнопки */ ?>
+                <div style="background:#fff;padding:20px;border:1px solid #ddd;border-radius:4px;margin-bottom:20px">
+                    <h3>🖱️ CTA-кнопки</h3>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap">
+                        <?php foreach ($result['cta_buttons'] ?? [] as $cta): ?>
+                            <span style="background:#f0f0f0;padding:8px 16px;border-radius:20px;font-weight:500">
+                                <?php echo esc_html($cta); ?>
+                            </span>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <?php /* Ключові слова */ ?>
+                <div style="background:#fff;padding:20px;border:1px solid #ddd;border-radius:4px;margin-bottom:20px">
+                    <h3>🔑 Ключові слова</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:15px">
+                        <?php
+                        $kw_types = [
+                            'broad'    => ['label' => 'Широка відповідність', 'color' => '#46b450'],
+                            'phrase'   => ['label' => 'Фразова відповідність', 'color' => '#ffb900'],
+                            'exact'    => ['label' => 'Точна відповідність',   'color' => '#2271b1'],
+                            'negative' => ['label' => 'Мінус-слова',           'color' => '#dc3232'],
+                        ];
+                        foreach ($kw_types as $type => $info):
+                            $words = $result['keywords'][$type] ?? [];
+                        ?>
+                            <div>
+                                <div style="font-weight:bold;color:<?php echo $info['color']; ?>;margin-bottom:8px;font-size:12px">
+                                    <?php echo esc_html($info['label']); ?>
+                                </div>
+                                <?php foreach ($words as $word): ?>
+                                    <div style="background:#f9f9f9;border:1px solid #e0e0e0;padding:4px 8px;
+                                                border-radius:3px;margin-bottom:4px;font-size:13px">
+                                        <?php echo esc_html($word); ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <?php /* Таргетинг */ ?>
+                <?php if (!empty($result['targeting'])): ?>
+                <div style="background:#fff;padding:20px;border:1px solid #ddd;border-radius:4px;margin-bottom:20px">
+                    <h3>🎯 Таргетинг</h3>
+                    <table class="widefat">
+                        <tr>
+                            <td style="width:150px"><strong>Вік</strong></td>
+                            <td><?php echo esc_html($result['targeting']['age'] ?? ''); ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Інтереси</strong></td>
+                            <td><?php echo esc_html(implode(', ', $result['targeting']['interests'] ?? [])); ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Геолокація</strong></td>
+                            <td><?php echo esc_html(implode(', ', $result['targeting']['locations'] ?? [])); ?></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Пристрої</strong></td>
+                            <td><?php echo esc_html($result['targeting']['devices'] ?? ''); ?></td>
+                        </tr>
+                    </table>
+                </div>
+                <?php endif; ?>
+
+                <?php /* Бюджет і KPI */ ?>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:20px">
+                    <?php if (!empty($result['budget_recommendation'])): ?>
+                    <div style="background:#fff;padding:20px;border:1px solid #ddd;border-radius:4px">
+                        <h3>💰 Рекомендації по бюджету</h3>
+                        <table class="widefat">
+                            <tr>
+                                <td><strong>Денний бюджет</strong></td>
+                                <td><?php echo esc_html($result['budget_recommendation']['daily_budget'] ?? ''); ?></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Стратегія ставок</strong></td>
+                                <td><?php echo esc_html($result['budget_recommendation']['bid_strategy'] ?? ''); ?></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Орієнт. CPC</strong></td>
+                                <td><?php echo esc_html($result['budget_recommendation']['estimated_cpc'] ?? ''); ?></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($result['kpis'])): ?>
+                    <div style="background:#fff;padding:20px;border:1px solid #ddd;border-radius:4px">
+                        <h3>📊 KPI кампанії</h3>
+                        <table class="widefat">
+                            <?php foreach ($result['kpis'] as $kpi): ?>
+                                <tr>
+                                    <td><strong><?php echo esc_html($kpi['metric'] ?? ''); ?></strong></td>
+                                    <td><?php echo esc_html($kpi['target'] ?? ''); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </table>
+                    </div>
+                    <?php endif; ?>
+                </div>
+
+            </div>
+        <?php endif; ?>
+    </div>
+    <?php
 }
