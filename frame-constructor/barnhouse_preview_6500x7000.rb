@@ -36,7 +36,9 @@ CT      = 2.mm      # товщина металу кріплень
 CA      = 50.mm     # висота куточка-кріплення
 CB      = 60.mm     # довжина основи куточка
 
-HEEL_H  = 50.mm     # висота п'яточки
+HEEL_H  = 50.mm     # висота п'яточки на стіні
+RHEEL_L = 150.mm    # довжина п'яточки на коньку
+RHEEL_H = 100.mm    # висота п'яточки на коньку
 RW      = 50.mm     # ширина кроквини
 RH      = 200.mm    # висота кроквини
 PITCH_DEG = 35.0
@@ -243,15 +245,35 @@ while y <= OL + 0.5.mm
   fr.reverse! if fr && fr.normal.y < 0
   fr.pushpull(RW) if fr
 
-  # Металева конькова скоба (ridge strap)
-  bx(ents, OW / 2 - CT / 2, y0, ridge_z - 100.mm, CT, RW, 100.mm, l_conn)
+  # ── П'ЯТОЧКИ НА КОНЬКУ — опорні бруски під кроквою ──
+  # Ліва сторона: брусок притиснутий до грані конькової балки
+  x_face_l   = OW / 2.0 - RW                    # ліва грань конькової балки
+  z_top_l    = heel_z_r + x_face_l * Math.tan(pitch)
+  z_under_l  = z_top_l - RH / Math.cos(pitch)   # низ кроквини в цій точці
+  bx(ents, x_face_l - RHEEL_L, y0, z_under_l - RHEEL_H,
+     RHEEL_L, RW, RHEEL_H, l_heel)
+
+  # Права сторона (дзеркало)
+  x_face_r   = OW / 2.0 + RW
+  z_top_r    = heel_z_r + (OW - x_face_r) * Math.tan(pitch)
+  z_under_r  = z_top_r - RH / Math.cos(pitch)
+  bx(ents, x_face_r, y0, z_under_r - RHEEL_H,
+     RHEEL_L, RW, RHEEL_H, l_heel)
+
+  # Металеві скоби через коньковий вузол (пластина на бічній грані)
+  bx(ents, x_face_l - RHEEL_L, y0 - CT, z_under_l - RHEEL_H,
+     RHEEL_L + 2 * RW + RHEEL_L, CT, RHEEL_H + 120.mm, l_conn)
+  bx(ents, x_face_l - RHEEL_L, y0 + RW, z_under_l - RHEEL_H,
+     RHEEL_L + 2 * RW + RHEEL_L, CT, RHEEL_H + 120.mm, l_conn)
 
   y += SP
 end
 
-# ── 10. КОНЬОК — подвійний 50×200 ────────────────────────────
-bx(ents, OW / 2 - RW,  0, ridge_z, RW, OL, RH, l_ridge)
-bx(ents, OW / 2,        0, ridge_z, RW, OL, RH, l_ridge)
+# ── 10. КОНЬОК — подвійний 50×200, ПІД кроквами як опора ─────
+# Верх конькової балки = рівень низу кроквини по центру
+ridge_top = heel_z_r + (OW / 2.0) * Math.tan(pitch) - RH / Math.cos(pitch)
+bx(ents, OW / 2 - RW, 0, ridge_top - RH, RW, OL, RH, l_ridge)
+bx(ents, OW / 2,       0, ridge_top - RH, RW, OL, RH, l_ridge)
 
 model.commit_operation
 
